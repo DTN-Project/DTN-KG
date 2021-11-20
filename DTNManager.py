@@ -6,6 +6,7 @@ import time
 import os
 from neo4j import GraphDatabase
 
+#DTNManager For Defining the Manager Component of the DTN Architecture
 class DTNManager:
     def __init__(self,user,pwd):
         self.auth = HTTPBasicAuth(user,pwd)
@@ -54,6 +55,7 @@ class DTNManager:
                 graphDB_Session.run("MATCH(a:Flow"+str(flows["id"])+"),(b:FlowTable"+str(flows["tableId"])+") CREATE (b)-[r:hasComponent]->(a)")
                                     
         print("KG Building Finished\n")
+        print("Closing\n")
         self.graphDB.close()
 
 d = DTNManager("onos","rocks")
