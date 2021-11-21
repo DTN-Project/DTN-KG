@@ -28,6 +28,7 @@ https://neo4j.com/docs/
 <br>
 
 **Installing Neo4j**:
+<br>
 1.Goto https://neo4j.com/  , and download the Neo4j desktop.
 
 2.On the next page, fill out the form by giving the details (Name, Email etc)
