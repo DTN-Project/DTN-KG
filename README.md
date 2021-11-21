@@ -25,6 +25,9 @@ https://neo4j.com/docs/api/python-driver/current/api.html#api-documentation
 https://neo4j.com/docs/
 
 
+
+
+
 **Installing Neo4j**:
 1.Goto https://neo4j.com/  , and download the Neo4j desktop.
 
@@ -42,6 +45,10 @@ https://neo4j.com/docs/
 
 **Setting Up Neo4j**:
 1.We can create a new database graph called **“dtn_kg”** to which we will add the nodes according to the KG schema decided as we extract the information from the SDN.
+
+2. Create a new database **"dtn_kg"**, create a new schema inside it called **"dtnkg"**.
+
+3.Create a user with admin and public roles with username:"dtn_user" and password:"password"
 
 2.DTN manager will be responsible for getting the information and building the KG, Updating and deleting the KG.
 
