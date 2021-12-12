@@ -60,7 +60,8 @@ class DTNManager:
                 sourcePort = str(link['src']['port'])
                 destinationSwitchId = str(link['dst']['device'][len(link['dst']['device'])-1])
                 destinationPort = str(link['dst']['port'])
-                graphDB_Session.run("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:isConnected{SrcPort:"+sourcePort+",DstPort:"+destinationPort+"}]->(b)")
+                if(len(graphDB_Session.run("MATCH (a:Switch{id:"+sourceSwitchId+"})-[r:isConnected]-(b:Switch{id:"+destinationSwitchId+"}) return r").data()) == 0):
+                    graphDB_Session.run("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:isConnected{SrcPort:"+sourcePort+",DstPort:"+destinationPort+"}]->(b)")
 
 
 
