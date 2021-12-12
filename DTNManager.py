@@ -47,9 +47,9 @@ class DTNManager:
                     switchId = str(location["elementId"][len(location["elementId"])-1])
                     port = str(location['port'])
                     print(switchId + "-" + port)
-                    if(len(graphDB_Session.run("MATCH(n:Host"+macId+") RETURN n").data()) == 0):
-                        graphDB_Session.run("CREATE(n:Host"+macId+")")
-                    graphDB_Session.run("MATCH(a:Switch"+switchId+"),(b:Host"+macId+") CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
+                    if(len(graphDB_Session.run("MATCH(n:Host{id:\""+macId+"\"}) RETURN n").data()) == 0):
+                        graphDB_Session.run("CREATE(n:Host{id:\""+macId+"\"})")
+                    graphDB_Session.run("MATCH(a:Switch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
         
     def connect_switches(self):
         links = self.links.getLinks()
