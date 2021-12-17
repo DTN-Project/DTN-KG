@@ -1,0 +1,7 @@
+*/__pycache__
+.idea
+*.pyc
+Lib/*
+Scripts/*
+*.cfg
+.vscode
