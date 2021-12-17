@@ -17,6 +17,7 @@ class DTNManager:
         self.fr = Flowrule(self.auth)
         self.hosts = Hosts(self.auth)
         self.links = Links(self.auth)
+        self.mac_port = {}                      #To Store The Flow Rules while we build the flow rule KG
         try:
             self.graphDB = GraphDatabase.driver("bolt://localhost:7687", auth=("dtn_user", "password"))
             print("DB Intialized")
@@ -33,6 +34,12 @@ class DTNManager:
                     graphDB_Session.run("CREATE(n:Object)")
                     graphDB_Session.run("CREATE(n:ForwardingDevice)")
                     graphDB_Session.run("MATCH(a:ForwardingDevice),(b:Object) CREATE (a)-[r:isA]->(b)")
+                    graphDB_Session.run("CREATE(n:Service)")
+                    graphDB_Session.run("CREATE(n:FlowRuleReachability)")
+                    graphDB_Session.run("MATCH(a:FlowRuleReachability),(b:Service) CREATE (a)-[r:isA]->(b)")
+                    graphDB_Session.run("CREATE(n:FlowRulePath)")
+                    graphDB_Session.run("MATCH(a:FlowRuleReachability),(b:FlowRulePath) CREATE (a)-[r:hasComponent]->(b)")
+                    
         
     def connect_hosts_to_switches(self):
         hosts = self.hosts.getHosts()
@@ -49,7 +56,7 @@ class DTNManager:
                     print(switchId + "-" + port)
                     if(len(graphDB_Session.run("MATCH(n:Host{id:\""+macId+"\"}) RETURN n").data()) == 0):
                         graphDB_Session.run("CREATE(n:Host{id:\""+macId+"\"})")
-                    graphDB_Session.run("MATCH(a:Switch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
+                    graphDB_Session.run("MATCH(a:FRSwitch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
         
     def connect_switches(self):
         links = self.links.getLinks()
@@ -63,8 +70,39 @@ class DTNManager:
                 if(len(graphDB_Session.run("MATCH (a:Switch{id:"+sourceSwitchId+"})-[r:isConnected]-(b:Switch{id:"+destinationSwitchId+"}) return r").data()) == 0):
                     graphDB_Session.run("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:isConnected{SrcPort:"+sourcePort+",DstPort:"+destinationPort+"}]->(b)")
 
+    def build_flowrule_reachability(self):
+        links = self.links.getLinks()
 
+        with self.graphDB.session(database="dtnkg") as graphDB_Session:
+            #We iterate through each link and check the corresponding flow rule in the FlowRule KG constructed, then we add an edge between the switches for all the matching source and destination mac addresses as link properties
+            #To store the flow rules we use a dictionary called mac_port which we use to store the flow rules for each switch ID
+            
+            for link in links['links']:
+                sourceSwitchId = str(link['src']['device'][len(link['src']['device'])-1])
+                sourcePort = str(link['src']['port'])
+                destinationSwitchId = str(link['dst']['device'][len(link['dst']['device'])-1])
+                destinationPort = str(link['dst']['port'])
 
+                if(len(graphDB_Session.run("MATCH(n:FRSwitch{id:"+sourceSwitchId+"}) return n").data())==0):
+                    graphDB_Session.run("CREATE(n:FRSwitch{id:"+sourceSwitchId+"})")
+                    graphDB_Session.run("MATCH(a:FlowRulePath),(b:FRSwitch{id:"+sourceSwitchId+"}) CREATE (a)-[r:hasPath]->(b)")
+
+                if(len(graphDB_Session.run("MATCH(n:FRSwitch{id:"+destinationSwitchId+"}) return n").data())==0):
+                    graphDB_Session.run("CREATE(n:FRSwitch{id:"+destinationSwitchId+"})")
+
+                edge_flag = False
+                if sourceSwitchId in self.mac_port:
+                    for sfr in self.mac_port[sourceSwitchId]:
+                        if sfr["out_port"] == sourcePort and sfr["out_type"] == "OUTPUT":
+                            if destinationSwitchId in self.mac_port:
+                                for dfr in self.mac_port[destinationSwitchId]:
+                                    if dfr["in_port"] == destinationPort:
+                                        edge_flag = True
+
+                                        if(len(graphDB_Session.run("MATCH path = (a:FRSwitch{id:"+sourceSwitchId+"})-[r:hasPath{in_port:"+sourcePort+",src_mac:\""+sfr["src_mac"]+"\",dst_mac:\""+dfr["dst_mac"]+"\",out_port:"+destinationPort+"}]->(b:FRSwitch{id:"+destinationSwitchId+"}) RETURN path").data())== 0):
+                                            graphDB_Session.run("MATCH(a:FRSwitch{id:"+sourceSwitchId+"}),(b:FRSwitch{id:"+destinationSwitchId+"}) CREATE (a)-[r:hasPath{in_port:"+sourcePort+",src_mac:\""+sfr["src_mac"]+"\",dst_mac:\""+dfr["dst_mac"]+"\",out_port:"+destinationPort+"}]->(b)")
+                                                
+                                 
     def getdata_and_build(self):
         #Trying to get flowrules from SDN and building the KG
         try:
@@ -92,16 +130,24 @@ class DTNManager:
                         graphDB_Session.run("CREATE(n:Match{id:"+flowId+"})")                                        # Match node for Match fields
                         graphDB_Session.run("MATCH(a:Flow{id:"+flowId+"}),(b:Match{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
 
+                        out_port = str(flows["treatment"]["instructions"][0]["port"])
+                        out_type = str(flows["treatment"]["instructions"][0]["type"])
+                        
                         if(len(flows["selector"]["criteria"])>=2):
-                            src = ''.join(x for x in re.split(":",str(flows["selector"]["criteria"][2]["mac"])))
-                            dst = ''.join(x for x in re.split(":",str(flows["selector"]["criteria"][1]["mac"])))
+                            src = str(flows["selector"]["criteria"][2]["mac"])
+                            dst = str(flows["selector"]["criteria"][1]["mac"])
+                            in_port = str(flows["selector"]["criteria"][0]["port"])
                             
                             graphDB_Session.run("CREATE(n:EthAddress{id:"+flowId+",src:\""+src+"\",dst:\""+dst+"\"})")
-                            graphDB_Session.run("CREATE(n:In_Port{id:"+flowId+",in_port:"+str(flows["selector"]["criteria"][0]["port"])+"})")
+                            graphDB_Session.run("CREATE(n:In_Port{id:"+flowId+",in_port:"+in_port+"})")
                             graphDB_Session.run("MATCH(a:Match{id:"+flowId+"}),(b:EthAddress{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")     #Node for Ethernet MatchField
-                            graphDB_Session.run("MATCH(a:Match{id:"+flowId+"}),(b:In_Port{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")        #Input Port Node
+                            graphDB_Session.run("MATCH(a:Match{id:"+flowId+"}),(b:In_Port{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")#Input Port Node
+                            if switchId not in self.mac_port:
+                                self.mac_port[switchId] = []
 
-                        graphDB_Session.run("CREATE(n:Instruction{id:"+flowId+",type:\""+str(flows["treatment"]["instructions"][0]["type"])+"\",port:\""+str(flows["treatment"]["instructions"][0]["port"])+"\"})")
+                            self.mac_port[switchId].append({"in_port":in_port,"src_mac":src,"dst_mac":dst,"out_type":out_type,"out_port":out_port})
+                        
+                        graphDB_Session.run("CREATE(n:Instruction{id:"+flowId+",type:\""+out_type+"\",port:\""+out_port+"\"})")
                         graphDB_Session.run("MATCH(a:Flow{id:"+flowId+"}),(b:Instruction{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
                              
                         graphDB_Session.run("CREATE(n:Priority{id:"+flowId+",value:"+str(flows["priority"])+"})")                     #Flow Priority Node
@@ -110,10 +156,12 @@ class DTNManager:
                         graphDB_Session.run("MATCH(a:Flow{id:" + flowId + "}),(b:Priority{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
                         graphDB_Session.run("MATCH(a:Flow{id:" + flowId + "}),(b:Timeout{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
                         graphDB_Session.run("MATCH(a:Flow{id:"+flowId+"}),(b:FlowTable{id:"+tableId+deviceId+"}) CREATE (b)-[r:hasComponent]->(a)")
-                        
+
                 
-                self.connect_switches()
-                self.connect_hosts_to_switches()
+
+                #self.connect_switches()
+                self.build_flowrule_reachability()
+                self.connect_hosts_to_switches() #Connecting the hosts to the FlowRule Switches for the Flow Rule Reachability Graph
                 
                 print("\033[92m KG Building Finished\033[00m\n")
                 time.sleep(5)
