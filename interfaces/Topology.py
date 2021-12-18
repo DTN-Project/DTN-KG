@@ -1,8 +1,8 @@
-import requests
+from utils.RestUtil import instance as RESTUtil
 
 class Topology:
     def __init__(self,auth):
-        self.rest_url = "http://localhost:8181/onos/v1/topology"
+        self.rest_url = "/onos/v1/topology"
         self.auth = auth
 
     def getTopology(self):
