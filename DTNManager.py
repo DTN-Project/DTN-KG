@@ -46,7 +46,9 @@ class DTNManager:
                 print(switchId + "-" + port)
                 if(len(DBUtil.execute_query("MATCH(n:Host{id:\""+macId+"\"}) RETURN n")) == 0):
                     DBUtil.execute_query("CREATE(n:Host{id:\""+macId+"\"})")
-                DBUtil.execute_query("MATCH(a:FRSwitch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
+                    DBUtil.execute_query("CREATE(n:FRHost{id:\""+macId+"\"})")
+                    
+                DBUtil.execute_query("MATCH(a:FRSwitch{id:"+switchId+"}),(b:FRHost{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
                 DBUtil.execute_query("MATCH(a:Switch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
         
     def connect_switches(self):
@@ -88,7 +90,7 @@ class DTNManager:
                                 if dfr["in_port"] == destinationPort:
                                     edge_flag = True
 
-                                    if(len(DBUtil.execute_query("MATCH path = (a:FRSwitch{id:"+sourceSwitchId+"})-[r:hasPath{in_port:"+sourcePort+",src_mac:\""+sfr["src_mac"]+"\",dst_mac:\""+dfr["dst_mac"]+"\",out_port:"+destinationPort+"}]->(b:FRSwitch{id:"+destinationSwitchId+"}) RETURN path"))== 0):
+                                    if(len(DBUtil.execute_query("MATCH path = (a:FRSwitch{id:"+sourceSwitchId+"})-[r:hasPath{in_port:"+destinationPort+",src_mac:\""+dfr["dst_mac"]+"\",dst_mac:\""+sfr["src_mac"]+"\",out_port:"+sourcePort+"}]-(b:FRSwitch{id:"+destinationSwitchId+"}) RETURN path"))== 0 and len(DBUtil.execute_query("MATCH path = (a:FRSwitch{id:"+sourceSwitchId+"})-[r:hasPath{in_port:"+sourcePort+",src_mac:\""+sfr["src_mac"]+"\",dst_mac:\""+dfr["dst_mac"]+"\",out_port:"+destinationPort+"}]-(b:FRSwitch{id:"+destinationSwitchId+"}) RETURN path"))== 0):
                                         DBUtil.execute_query("MATCH(a:FRSwitch{id:"+sourceSwitchId+"}),(b:FRSwitch{id:"+destinationSwitchId+"}) CREATE (a)-[r:hasPath{in_port:"+sourcePort+",src_mac:\""+sfr["src_mac"]+"\",dst_mac:\""+dfr["dst_mac"]+"\",out_port:"+destinationPort+"}]->(b)")
                                                 
                                  
