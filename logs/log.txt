@@ -1,0 +1,3 @@
+[2021-12-20 19:15:10.550613]DTN Manager Intializing
+[2021-12-20 19:15:10.569428]KG Head Nodes Created
+[2021-12-20 19:15:10.569448]DTN Manager Initialized
