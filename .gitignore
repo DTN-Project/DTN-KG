@@ -1,6 +1,7 @@
 */__pycache__
 .idea
 *.pyc
+*.py~
 Lib/*
 Scripts/*
 *.cfg
