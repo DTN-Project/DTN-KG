@@ -8,3 +8,4 @@ sdn_host = localhost
 sdn_port = 8181
 sdn_user = onos
 sdn_password = rocks
+log_file = ./logs/log.txt

@@ -14,3 +14,4 @@ class Config:
     sdn_port = config.get("sdn_port")
     sdn_user = config.get("sdn_user")
     sdn_password = config.get("sdn_password")
+    log_file = config.get("log_file")
