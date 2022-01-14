@@ -1,0 +1,6 @@
+Type: Entity
+Name: Instruction
+Properties:
+  - id
+  - type
+  - port
