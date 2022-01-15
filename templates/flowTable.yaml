@@ -1,0 +1,8 @@
+Type: Entity
+Name: FlowTable
+Properties:
+  - id
+
+Relationships:
+  - name: hasComponent
+    entity: Flow

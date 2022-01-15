@@ -1,0 +1,10 @@
+Type: Entity
+Name: Host
+Properties:
+  - id
+
+Relationships:
+  - name: isConnected
+    entity: Switch
+    properties:
+    - Port

@@ -1,0 +1,14 @@
+Type: Entity
+Name: Switch
+Properties:
+  - id
+
+Relationships:
+  - name: isConnected
+    entity: Switch
+    properties:
+    - SrcPort
+    - DstPort
+  - name: hasComponent
+    entity: FlowTable
+    

@@ -1,0 +1,14 @@
+Type: Entity
+Name: Flow
+Properties:
+  - id
+
+Relationships:
+  - name: hasComponent
+    entity: Timeout
+  - name: hasComponent
+    entity: Instruction
+  - name: hasComponent
+    entity: Match
+  - name: hasComponent
+    entity: Priority

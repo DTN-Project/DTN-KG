@@ -9,6 +9,7 @@ from termcolor import colored
 from utils.logger import logger as Logger
 import datetime
 from utils.Configs import Config
+from utils.TemplateUtils import instance as TemplateUtil
 import requests
 
 #DTNManager For Defining the Manager Component of the DTN Architecture
@@ -17,6 +18,8 @@ class DTNManager:
         self.fr = FlowRules()
         self.hosts = Hosts()
         self.links = Links()
+        self.entity_map = {}
+        self.properties_map = {}
         self.mac_port = {}                      #To Store The Flow Rules while we build the flow rule KG
         Logger.log_write("DTN Manager Intializing")
         try:
@@ -55,13 +58,18 @@ class DTNManager:
                 switchId = str(location["elementId"][len(location["elementId"])-1])
                 port = str(location['port'])
                 print(switchId + "-" + port)
-                if(len(DBUtil.execute_query("MATCH(n:Host{id:\""+macId+"\"}) RETURN n")) == 0):
-                    DBUtil.execute_query("CREATE(n:Host{id:\""+macId+"\"})")
-                    DBUtil.execute_query("CREATE(n:FRHost{id:\""+macId+"\"})")
+                if(len(DBUtil.execute_query("MATCH(n:Host{"+self.properties_map['Host'][0]+":\""+macId+"\"}) RETURN n")) == 0):
+                    DBUtil.execute_query("CREATE(n:Host{"+self.properties_map['Host'][0]+":\""+macId+"\"})")
+                    DBUtil.execute_query("CREATE(n:FRHost{"+self.properties_map['Host'][0]+":\""+macId+"\"})")
                     
                 DBUtil.execute_query("MATCH(a:FRSwitch{id:"+switchId+"}),(b:FRHost{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
                 Logger.log_write("Hosts Connected to Flow Rule KG")
-                DBUtil.execute_query("MATCH(a:Switch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:isConnected{Port:"+port+"}]->(a)")
+                
+                relationship_data = TemplateUtil.get_relationship_details('Host','Switch')
+                relationship_name = relationship_data['name']
+                relationship_properties = relationship_data['properties']
+                
+                DBUtil.execute_query("MATCH(a:Switch{id:"+switchId+"}),(b:Host{id:\""+macId+"\"}) CREATE (b)-[r:"+relationship_name+"{"+relationship_properties[0]+":"+port+"}]->(a)")
                 Logger.log_write("Hosts connected to KG")
         
     def connect_switches(self):
@@ -73,7 +81,10 @@ class DTNManager:
             destinationSwitchId = str(link['dst']['device'][len(link['dst']['device'])-1])
             destinationPort = str(link['dst']['port'])
             if(len(DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"})-[r:isConnected]-(b:Switch{id:"+destinationSwitchId+"}) return r")) == 0):
-                DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:isConnected{SrcPort:"+sourcePort+",DstPort:"+destinationPort+"}]->(b)")
+                relationship_data = TemplateUtil.get_relationship_details('Switch','Switch')
+                relationship_name = relationship_data['name']
+                relationship_properties = relationship_data['properties']
+                DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:"+relationship_name+"{"+relationship_properties[0]+":"+sourcePort+","+relationship_properties[1]+":"+destinationPort+"}]->(b)")
 
     def build_flowrule_reachability(self):
         links = self.links.getLinks()
@@ -112,6 +123,8 @@ class DTNManager:
                                  
     def getdata_and_build(self):
         Logger.log_write("Intial KG Build started")
+        self.entity_map, self.properties_map = TemplateUtil.read_templates()
+        
         #Trying to get flowrules from SDN and building the KG
         try:
             while(True):
@@ -129,23 +142,25 @@ class DTNManager:
                     Logger.log_write("Creating a flow node for a flow")
                     switchId = str(flows["deviceId"][len(flows["deviceId"])-1])
                     if(len(DBUtil.execute_query("MATCH(n:Switch{id:"+switchId+"}) RETURN n")) == 0):
-                        DBUtil.execute_query("CREATE(n:Switch{id:"+switchId+"})") # Switch Node with Switch ID
+                        DBUtil.execute_query("CREATE(n:Switch{"+self.properties_map['Switch'][0]+":"+switchId+"})") # Switch Node with Switch ID
                         Logger.log_write("Switch node created for flow rule KG")
                         deviceId = str(flows["deviceId"][len(flows["deviceId"])-1])
                         tableId = str(flows["tableId"])
-                        DBUtil.execute_query("CREATE(n:FlowTable{id:"+tableId+deviceId+"})")      #Flow Table Node
+                        DBUtil.execute_query("CREATE(n:FlowTable{"+self.properties_map['FlowTable'][0]+":"+tableId+deviceId+"})")      #Flow Table Node
                         Logger.log_write("Flow table node created")
                         DBUtil.execute_query("MATCH(a:Switch{id:"+switchId+"}),(b:ForwardingDevice) CREATE (a)-[r:isA]->(b)")
-                        Logger.log_write("Switch connected to ForwardingDeice node")
-                        DBUtil.execute_query("MATCH(a:Switch{id:"+switchId+"}),(b:FlowTable{id:"+tableId+deviceId+"}) CREATE (a)-[r:hasComponent]->(b)")
+                        Logger.log_write("Switch connected to ForwardingDevice node")
+                        relation_name = TemplateUtil.get_relationship_details('Switch','FlowTable')['name']
+                        DBUtil.execute_query("MATCH(a:Switch{id:"+switchId+"}),(b:FlowTable{id:"+tableId+deviceId+"}) CREATE (a)-[r:"+relation_name+"]->(b)")
                         Logger.log_write("Switch node connected to flow table node")
 
                     flowId = str(flows["id"])
-                    DBUtil.execute_query("CREATE(n:Flow{id:"+flowId+"})")                     #Flow Node to represent the flow
+                    DBUtil.execute_query("CREATE(n:Flow{"+self.properties_map['Flow'][0]+":"+flowId+"})")                     #Flow Node to represent the flow
                     Logger.log_write("Flow node created")
-                    DBUtil.execute_query("CREATE(n:Match{id:"+flowId+"})")                                        # Match node for Match fields
+                    DBUtil.execute_query("CREATE(n:Match{"+self.properties_map['Match'][0]+":"+flowId+"})")                                        # Match node for Match fields
                     Logger.log_write("Match node created")
-                    DBUtil.execute_query("MATCH(a:Flow{id:"+flowId+"}),(b:Match{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
+                    relation_name = TemplateUtil.get_relationship_details('Flow','Match')['name']
+                    DBUtil.execute_query("MATCH(a:Flow{id:"+flowId+"}),(b:Match{id:"+flowId+"}) CREATE (a)-[r:"+relation_name+"]->(b)")
                     Logger.log_write("Match node connected to flow node")
 
                     out_port = str(flows["treatment"]["instructions"][0]["port"])
@@ -166,15 +181,19 @@ class DTNManager:
 
                         self.mac_port[switchId].append({"in_port":in_port,"src_mac":src,"dst_mac":dst,"out_type":out_type,"out_port":out_port})
                     
-                    DBUtil.execute_query("CREATE(n:Instruction{id:"+flowId+",type:\""+out_type+"\",port:\""+out_port+"\"})")
-                    DBUtil.execute_query("MATCH(a:Flow{id:"+flowId+"}),(b:Instruction{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
+                    DBUtil.execute_query("CREATE(n:Instruction{"+self.properties_map['Instruction'][0]+":"+flowId+","+self.properties_map['Instruction'][1]+":\""+out_type+"\","+self.properties_map['Instruction'][2]+":\""+out_port+"\"})")
+                    relation_name = TemplateUtil.get_relationship_details('Flow','Instruction')['name']
+                    DBUtil.execute_query("MATCH(a:Flow{id:"+flowId+"}),(b:Instruction{id:"+flowId+"}) CREATE (a)-[r:"+relation_name+"]->(b)")
                             
-                    DBUtil.execute_query("CREATE(n:Priority{id:"+flowId+",value:"+str(flows["priority"])+"})")                     #Flow Priority Node
-                    DBUtil.execute_query("CREATE(n:Timeout{id:"+flowId+",timeout_value:" + str(flows['timeout']) + "})")           #Flow Timeout Node
+                    DBUtil.execute_query("CREATE(n:Priority{"+self.properties_map['Priority'][0]+":"+flowId+","+self.properties_map['Priority'][1]+":"+str(flows["priority"])+"})")                     #Flow Priority Node
+                    DBUtil.execute_query("CREATE(n:Timeout{"+self.properties_map['Timeout'][0]+":"+flowId+","+self.properties_map['Timeout'][1]+":" + str(flows['timeout']) + "})")           #Flow Timeout Node
                     
-                    DBUtil.execute_query("MATCH(a:Flow{id:" + flowId + "}),(b:Priority{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
-                    DBUtil.execute_query("MATCH(a:Flow{id:" + flowId + "}),(b:Timeout{id:"+flowId+"}) CREATE (a)-[r:hasComponent]->(b)")
-                    DBUtil.execute_query("MATCH(a:Flow{id:"+flowId+"}),(b:FlowTable{id:"+tableId+deviceId+"}) CREATE (b)-[r:hasComponent]->(a)")
+                    relation_name = TemplateUtil.get_relationship_details('Flow','Priority')['name']
+                    DBUtil.execute_query("MATCH(a:Flow{id:" + flowId + "}),(b:Priority{id:"+flowId+"}) CREATE (a)-[r:"+relation_name+"]->(b)")
+                    relation_name = TemplateUtil.get_relationship_details('Flow','Timeout')['name']
+                    DBUtil.execute_query("MATCH(a:Flow{id:" + flowId + "}),(b:Timeout{id:"+flowId+"}) CREATE (a)-[r:"+relation_name+"]->(b)")
+                    relation_name = TemplateUtil.get_relationship_details('FlowTable','Flow')['name']
+                    DBUtil.execute_query("MATCH(a:Flow{id:"+flowId+"}),(b:FlowTable{id:"+tableId+deviceId+"}) CREATE (b)-[r:"+relation_name+"]->(a)")
                     Logger.log_write("Flow node connected to priority,timeout and flowtable nodes")
 
                 self.connect_switches()
@@ -192,7 +211,7 @@ class DTNManager:
             print("[\033[32m"+str(datetime.datetime.now())+"\033[0m]"+"\033[91mClosing\033[00m\n")
             Logger.log_write("Closing connections")
             Logger.close_log()
-            self.graphDB.close()
+            #self.graphDB.close()
 
 
 #Helper Function to check if the REST Endpoints are up and running for the DB and SDN instances            
