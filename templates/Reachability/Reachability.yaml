@@ -1,0 +1,41 @@
+variables:
+ entities:
+   Switch:
+   - id
+   - mfr
+   - protocol
+   Host:
+   - mac
+   - vlan 
+   ForwardingDevice:
+   
+   Object:
+
+ relationships:
+   - map: 
+     - Switch
+     - Switch
+     - isConnected
+   - map:
+     - Host
+     - Switch
+     - isConnected
+     Properties:
+       - connected_port
+   - map:
+     - Switch
+     - ForwardingDevice
+     - isA
+   - map:
+     - ForwardingDevice
+     - Object
+     - isA
+
+mechanisms:
+     script: 'reachability'                
+
+policies:
+     - policy:
+       name: 'ReachabilityCheck'
+       deploy : 'checkReachability'  
+

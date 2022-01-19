@@ -1,5 +1,0 @@
-Type: Entity
-Name: Priority
-Properties:
-  - id
-  - value
