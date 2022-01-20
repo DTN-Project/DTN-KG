@@ -1,5 +1,0 @@
-Type: Entity
-Name: Timeout
-Properties:
-  - id
-  - timeout_value

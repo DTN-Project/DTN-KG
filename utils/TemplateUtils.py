@@ -1,36 +1,32 @@
 import yaml
-import glob
+import re
 
 class TemplateUtils:
 
-    entity_map = {}
-    properties_map = {}
+    templatedata = None
+    templateName = None
+    templateParentDirectory = None
+    def load(self,template_file):
+        self.templateName = re.split("\.",re.split("/",template_file)[2])[0]
+        self.templateParentDirectory = re.split("/",template_file)[2]
+        with open(template_file,"r") as stream:
+            self.templatedata = yaml.safe_load(stream)
 
-    def read_templates(self):
-        template_files = glob.glob("templates/*.yaml")
-        for file in template_files:
-            with open(file, 'r') as stream:
-               file_content = yaml.safe_load(stream)
-               type = file_content['Type']
-               name = file_content['Name']
-               properties = file_content['Properties']
-               self.properties_map[name] = properties
-               relationships = {}
-               if 'Relationships'  in file_content:
-                 relationships = file_content['Relationships']
-               self.entity_map[name] = [properties, relationships]
+    def get_entities(self):
+        return list(self.templatedata["variables"]["entities"].keys())
 
-               print(file_content)
-        return self.entity_map, self.properties_map
+    def get_relations(self):
+        return self.templatedata["variables"]["relationships"]
 
-    def get_relationship_details(self, source_entity, destination_entity):
-        relationship_data = self.entity_map[source_entity][1]
-        relationship_details = {}
-        for relations in relationship_data:
-            if relations['entity'] == destination_entity:
-                relationship_details = relations
-                break
+    def get_properties(self,entity):
 
-        return relationship_details
+        return self.templatedata["variables"]["entities"][entity]
+
+    def get_mechanisms(self):
+
+        return self.templatedata["mechanisms"]
+
+    def get_policies(self):
+        return self.templatedata["policies"]
 
 instance = TemplateUtils()
