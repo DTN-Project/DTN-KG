@@ -1,0 +1,26 @@
+variables:
+  entities:
+    Switch:
+      - id
+    Host:
+      - mac
+      - switch
+      - port
+  
+  relationships:
+      - map:
+         - Switch
+         - Switch
+         - isConnected
+      - map:
+         - Host
+         - Switch
+         - isConnected
+
+mechanisms:
+    script: 'hostswitchmap'
+
+policies:
+    - policy:
+      name: 'HostSwitchMap'
+      deploy: 'getMappings'
