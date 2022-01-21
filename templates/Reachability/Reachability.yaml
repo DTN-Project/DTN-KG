@@ -21,7 +21,7 @@ variables:
      - Switch
      - isConnected
      Properties:
-       - connected_port
+       - port
    - map:
      - Switch
      - ForwardingDevice
