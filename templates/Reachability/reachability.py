@@ -26,7 +26,7 @@ class Mechanism:        # Class for defining Mechanism Should be named Mechanism
                     if(len(DBUtil.execute_query("MATCH(n:Host{mac:"+"\'"+ h2.get("mac",'')+"\'"+"}) RETURN n")) == 0):
                         print(colored(h2+" Not present in KG\n",'red'))
 
-                    if(len(DBUtil.execute_query("Match path=(h1:Host{mac:"+"\'"+h1.get("mac",'')+"\'"+"})-[r1:"+host_switch_rel+"]-(s1:Switch)-[r2:"+switch_switch_rel+"]-(s2:Switch)-[r3:"+host_switch_rel+"]-(h2:Host{mac:"+"\'"+h2.get("mac",'')+"\'"+"}) RETURN path")) !=0):
+                    if(len(DBUtil.execute_query("Match path=(h1:Host{mac:"+"\'"+h1.get("mac",'')+"\'"+"})-[r1:"+host_switch_rel+"*]-(s1:Switch)-[r2:"+switch_switch_rel+"*]-(s2:Switch)-[r3:"+host_switch_rel+"*]-(h2:Host{mac:"+"\'"+h2.get("mac",'')+"\'"+"}) RETURN path")) !=0):
                         print(colored(h1.get("mac",'')+" has reachability to "+h2.get("mac",''),'green'))
 
                     else:

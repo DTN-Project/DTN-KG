@@ -6,6 +6,8 @@ variables:
       - mac
       - switch
       - port
+    
+    Object:
   
   relationships:
       - map:
@@ -16,11 +18,15 @@ variables:
          - Host
          - Switch
          - isConnected
+      - map:
+         - Switch
+         - Object
+         - isA
 
 mechanisms:
     script: 'hostswitchmap'
 
 policies:
     - policy:
-      name: 'HostSwitchMap'
+      name: 'HostswitchMap'
       deploy: 'getMappings'
