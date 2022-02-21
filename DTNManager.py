@@ -1,3 +1,5 @@
+import re
+
 from interfaces.FlowRules import FlowRules
 from interfaces.Hosts import Hosts
 from interfaces.Links import Links
@@ -37,9 +39,9 @@ class DTNManager:
         links = self.links.getLinks()
 
         for link in links['links']:
-            sourceSwitchId = str(link['src']['device'][len(link['src']['device'])-1])
+            sourceSwitchId = "\'" + str(re.split("of:", link['src']['device'])[1])+ "\'"
             sourcePort = str(link['src']['port'])
-            destinationSwitchId = str(link['dst']['device'][len(link['dst']['device'])-1])
+            destinationSwitchId = "\'" + str(re.split("of:", link['dst']['device'])[1])+ "\'"
             destinationPort = str(link['dst']['port'])
             if(len(DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"})-[r:isConnected]-(b:Switch{id:"+destinationSwitchId+"}) return r")) == 0):
                 DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:"+relation+"{sourcePort:"+sourcePort+",destinationPort:"+destinationPort+"}]->(b)")
@@ -52,7 +54,8 @@ class DTNManager:
 
             if (entity=="Switch"):
                 for sw in data["switches"]["devices"]:
-                    all_props = {"id":str(sw["id"][len(sw["id"])-1]),"type":sw["type"],"available":sw["available"],"role":sw["role"],"mfr":"\'"+sw["mfr"]+"\'","hw":"\'"+sw["hw"]+"\'","sw":"\'"+sw["sw"]+"\'","serial":str(sw["serial"]),"driver":sw["driver"],"chassisId":str(sw["chassisId"]),"lastUpdate":str(sw["lastUpdate"]),"humanReadableLastUpdate":sw["humanReadableLastUpdate"],"protocol":"\'"+sw["annotations"]["protocol"]+"\'"}
+                    id = "\'"+str(re.split("of:",sw["id"])[1])+"\'"
+                    all_props = {"id":id,"type":sw["type"],"available":sw["available"],"role":sw["role"],"mfr":"\'"+sw["mfr"]+"\'","hw":"\'"+sw["hw"]+"\'","sw":"\'"+sw["sw"]+"\'","serial":str(sw["serial"]),"driver":sw["driver"],"chassisId":str(sw["chassisId"]),"lastUpdate":str(sw["lastUpdate"]),"humanReadableLastUpdate":sw["humanReadableLastUpdate"],"protocol":"\'"+sw["annotations"]["protocol"]+"\'"}
                     
                     props = TempUtil.get_properties(entity)
 
@@ -178,7 +181,8 @@ class DTNManager:
                 props = TempUtil.get_properties(entity)
 
                 for host in data["hosts"]["hosts"]:
-                    all_props = {"mac":"\'"+host["mac"]+"\'","vlan":"\'"+host["vlan"]+"\'","innerVlan":"\'"+host["innerVlan"]+"\'","outerTpid":str(host["outerTpid"]),"configured":host["configured"],"suspended":host["suspended"],"switch":str(host["locations"][0]["elementId"][len(host["locations"][0]["elementId"])-1]),"port":host["locations"][0]["port"]}
+                    switch_id = "\'" + str(re.split("of:", host["locations"][0]["elementId"])[1])+ "\'"
+                    all_props = {"mac":"\'"+host["mac"]+"\'","vlan":"\'"+host["vlan"]+"\'","innerVlan":"\'"+host["innerVlan"]+"\'","outerTpid":str(host["outerTpid"]),"configured":host["configured"],"suspended":host["suspended"],"switch":switch_id,"port":host["locations"][0]["port"]}
 
                     prop_string=""
                     for p in props:
