@@ -15,6 +15,8 @@ from utils.Configs import Config
 from utils.TemplateUtils import instance as TempUtil
 import requests
 import argparse
+import time
+import pickle
 
 #DTNManager For Defining the Manager Component of the DTN Architecture
 class DTNManager:
@@ -51,7 +53,6 @@ class DTNManager:
         entities = TempUtil.get_entities()
 
         for entity in entities:
-
             if (entity=="Switch"):
                 for sw in data["switches"]["devices"]:
                     id = "\'"+str(re.split("of:",sw["id"])[1])+"\'"
@@ -79,7 +80,7 @@ class DTNManager:
                                      "liveType": flow["liveType"], "lastSeen": str(flow["lastSeen"]),
                                      "packets": str(flow["packets"]), "bytes": str(flow["bytes"]), "id": str(flow["id"]),
                                      "appId": flow["appId"], "priority": str(flow["priority"]), "timeout": str(flow["timeout"]),
-                                     "isPermanent": flow["isPermanent"], "deviceId": str(flow["deviceId"][len(flow["deviceId"])-1]),
+                                     "isPermanent": flow["isPermanent"], "deviceId":str(re.split("of:",flow["deviceId"])[1]),
                                      "tableId": str(flow["tableId"]), "tableName": str(flow["tableName"]),
                                      "type": "\'"+flow["treatment"]["instructions"][0]["type"]+"\'",
                                      "port": "\'"+flow["treatment"]["instructions"][0]["port"]+"\'",
@@ -92,7 +93,7 @@ class DTNManager:
                                      "liveType": flow["liveType"], "lastSeen": str(flow["lastSeen"]),
                                      "packets": str(flow["packets"]), "bytes": str(flow["bytes"]), "id": str(flow["id"]),
                                      "appId": flow["appId"], "priority": str(flow["priority"]), "timeout": str(flow["timeout"]),
-                                     "isPermanent": flow["isPermanent"], "deviceId": str(flow["deviceId"][len(flow["deviceId"])-1]),
+                                     "isPermanent": flow["isPermanent"], "deviceId": str(re.split("of:",flow["deviceId"])[1]),
                                      "tableId": str(flow["tableId"]), "tableName": str(flow["tableName"]),
                                      "type": "\'"+flow["treatment"]["instructions"][0]["type"]+"\'",
                                      "port": "\'"+flow["treatment"]["instructions"][0]["port"]+"\'",
@@ -105,7 +106,7 @@ class DTNManager:
 
                     for p in props:
                         if entity == "FlowTable" and p == "tableId":
-                            prop_string += p+":"+str(all_props[p])+str(all_props["deviceId"])+","
+                            prop_string += p+":"+"\'"+str(all_props[p])+str(all_props["deviceId"])+"\'"+","
                             continue
 
                         prop_string += p+":"+all_props[p]+","
@@ -119,7 +120,7 @@ class DTNManager:
 
                             relation = self.process_relations("Switch","FlowTable",all_props)
 
-                            DBUtil.execute_query("MATCH(a:Switch{id:" + all_props["deviceId"] + "}),(b:FlowTable{"+prop_string + "}) CREATE (a)-[r:" + relation + "]->(b)")
+                            DBUtil.execute_query("MATCH(a:Switch{id:"+"\'"+all_props["deviceId"]+"\'"+"}),(b:FlowTable{"+prop_string+"}) CREATE (a)-[r:" + relation + "]->(b)")
 
                     elif (entity == "Flow"):
                         DBUtil.execute_query("CREATE(n:Flow{"+prop_string+"})")
@@ -127,7 +128,7 @@ class DTNManager:
 
                         relation = self.process_relations("FlowTable", "Flow", all_props)
 
-                        DBUtil.execute_query("MATCH(a:FlowTable{tableId:"+str(all_props["tableId"])+str(all_props["deviceId"])+"}),(b:Flow{id:"+all_props["id"] +"}) CREATE (a)-[r:" + relation + "]->(b)")
+                        DBUtil.execute_query("MATCH(a:FlowTable{tableId:"+"\'"+str(all_props["tableId"])+str(all_props["deviceId"])+"\'"+"}),(b:Flow{id:"+all_props["id"] +"}) CREATE (a)-[r:" + relation + "]->(b)")
 
                     elif (entity == "Instruction"):
                         DBUtil.execute_query("CREATE(n:Instruction{"+prop_string+"})")
@@ -151,7 +152,7 @@ class DTNManager:
                             DBUtil.execute_query("CREATE(n:EthAddress{"+prop_string+"})")
                             Logger.log_write("EthAddress Node with properties {"+prop_string+"} created")
 
-                            relation = self.process_relations("Match", "EthAddress", all_props)
+                            relation = self.process_relations("Match","EthAddress", all_props)
                             DBUtil.execute_query("MATCH(a:Match{id:" + all_props["id"] + "}),(b:EthAddress{id:" + all_props["id"] + "}) CREATE (a)-[r:" + relation + "]->(b)")
 
                     elif (entity == "In_Port"):
@@ -304,7 +305,6 @@ class DTNManager:
 
     def getdata_and_build(self):
         Logger.log_write("Intial Knowledge Graph Build started")
-    
         try:
             while(True):
                 switches = self.sw.get_switches()
@@ -345,6 +345,7 @@ class DTNManager:
                 
                 Logger.log_write("KG building completed")
                 time.sleep(5)
+
                 print("[\033[32m"+str(datetime.datetime.now())+"\033[0m]"+"\033[91mClearing Graph....Refreshing\033[00m\n")
                 Logger.log_write("Knowledge Graph clearing and refreshing")
                 system('clear')
