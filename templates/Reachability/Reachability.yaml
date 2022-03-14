@@ -37,5 +37,5 @@ mechanisms:
 policies:
      - policy:
        name: 'ReachabilityCheck'
-       deploy : 'checkReachability'  
+       deploy : 'checkReachability'
 

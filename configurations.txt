@@ -1,5 +1,5 @@
 db_host = localhost
-db_port = 7687
+db_port = 11005
 db_user = dtn_user
 db_password = password
 db_database = dtnkg
