@@ -30,3 +30,4 @@ policies:
     - policy:
       name: 'HostswitchMap'
       deploy: 'getMappings'
+

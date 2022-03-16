@@ -17,3 +17,15 @@ class Mechanism:
 
         print(colored("The Following are the Host-Switch Mappings in the current network\n",'yellow',attrs=['bold']))
         print(colored(tabulate(self.table,headers="firstrow",tablefmt="fancy_grid",numalign="center"),'cyan',attrs=['bold']))
+
+    def getSwitchMappings(self,kg_relations):
+        results = DBUtil.execute_query("MATCH (s1:Switch)-[r:"+kg_relations["switch_switch_rel"]+"]->(s2:Switch) RETURN s1,s2,properties(r)")
+
+        self.table = [["Switch 1","Switch 2","Egress Port","Ingress Port"]]
+        for switch_map in results:
+            self.table.append([switch_map['s1']['id'],switch_map['s2']['id'],
+                               switch_map['properties(r)']['sourcePort'],switch_map['properties(r)']['destinationPort']])
+
+        print(colored("The Following are the Switch-Switch Mappings in the current network\n", 'magenta', attrs=['bold']))
+        print(colored(tabulate(self.table, headers="firstrow", tablefmt="fancy_grid", numalign="center"), 'white',
+                      attrs=['bold']))
