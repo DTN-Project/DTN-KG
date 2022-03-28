@@ -94,12 +94,22 @@ class Mechanism:        # Class for defining Mechanism Should be named Mechanism
                     if (len(DBUtil.execute_query(
                             "MATCH(n:Host{mac:" + "\'" + h2.get("mac", '') + "\'" + "}) RETURN n")) == 0):
                         continue
-
-                    if (len(DBUtil.execute_query("Match path=(h1:Host{mac:" + "\'" + h1.get("mac",'') + "\'" + "})-[r1:" + host_switch_rel + "]-(s1:Switch)-[r2:" + switch_switch_rel + "*]-(s2:Switch)-[r3:" + host_switch_rel + "]-(h2:Host{mac:" + "\'" + h2.get(
-                            "mac", '') + "\'" + "}) RETURN path")) != 0):
-
-                        result = DBUtil.execute_query("Match path=(h1:Host{mac:" + "\'" + h1.get("mac",'') + "\'" + "})-[r1:" + host_switch_rel + "]-(s1:Switch)-[r2:" + switch_switch_rel + "*]-(s2:Switch)-[r3:" + host_switch_rel + "]-(h2:Host{mac:" + "\'" + h2.get(
-                            "mac", '') + "\'" + "}) RETURN path")
+                    
+                    d3 = DBUtil.execute_query("Match (h1:Host{mac:"+"\'"+h1.get("mac",'')+"\'"+"})-[r1:"+host_switch_rel+"]-(s1:Switch) return s1")
+                    
+                    d4 = DBUtil.execute_query("Match (s2:Switch)-[r3:"+host_switch_rel+"]-(h2:Host{mac:"+"\'"+h2.get("mac",'')+"\'"+"}) RETURN s2")
+                    
+                    sourceId = d3[0]['s1']['id']
+                    destId = d4[0]['s2']['id']
+                    
+                    query1 = "Match path=(s1:Switch{id:\'"+ sourceId +"'})-[r2:"+switch_switch_rel+"*]->(s2:Switch{id:\'"+ destId +"'}) RETURN path"
+                    result = DBUtil.execute_query(query1)
+                    
+                    if(len(result) == 0):
+                        query1 = "Match path=(s1:Switch{id:\'"+ destId +"'})-[r2:"+switch_switch_rel+"*]->(s2:Switch{id:\'"+ sourceId +"'}) RETURN path"
+                        result = DBUtil.execute_query(query1)
+                        
+                    if (len(result) != 0):
 
                         hop_count = 0
                         for data in result:
