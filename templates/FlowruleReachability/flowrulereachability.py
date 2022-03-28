@@ -98,12 +98,12 @@ class Mechanism:        # Class for defining Mechanism Should be named Mechanism
 
                     # since the current switch id is not the destination switch id, check whether there is a link to another switch from
                     # the current switch originating from the OUT_PORT
-                    q5 = "MATCH (s1:Switch{id:" +"\'"+switchId +"\'"+ "})-[r:"+switch_switch_rel+"{sourcePort:" + out_port + "}]-(s2:Switch) return s2,properties(r)"
+                    q5 = "MATCH (s1:Switch{id:" +"\'"+switchId +"\'"+ "})-[r:"+switch_switch_rel+"{sourcePort:" + out_port + "}]->(s2:Switch) return s2,properties(r)"
                     data5 = DBUtil.execute_query(q5)
 
                     # since the relation is directed, we need to check in the other direction as well
                     if (len(data5) == 0):
-                        q5 = "MATCH (s1:Switch{id:" +"\'"+switchId +"\'"+"})-[r:"+switch_switch_rel+"{destinationPort:" + out_port + "}]-(s2:Switch) return s2,properties(r)"
+                        q5 = "MATCH (s2:Switch)-[r:"+switch_switch_rel+"{destinationPort:" + out_port + "}]->(s1:Switch{id:" +"\'"+switchId +"\'"+"}) return s2,properties(r)"
                         data5 = DBUtil.execute_query(q5)
 
                         # there exists no link originating from the current switch from OUT_PORT.
