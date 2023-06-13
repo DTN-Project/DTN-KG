@@ -5,7 +5,7 @@ class Topology:
         self.rest_path = "/onos/v1/topology"
 
     def getTopology(self):
-        response = RESTUtil.invoke_rest_api(self.rest_url)
+        response = RESTUtil.invoke_rest_api(self.rest_path)
         return response
 
 

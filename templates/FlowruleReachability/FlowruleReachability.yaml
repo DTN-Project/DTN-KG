@@ -76,6 +76,9 @@ mechanisms:
 
 policies:
      - policy:
-       name: 'FlowRuleReachabilityCheck'
+       name: 'CheckReachabilityByFlowRule'
        deploy : 'checkFlowRuleReachability'
+     - policy:
+       name: 'CountSwitchHopsInForwardingPath'
+       deploy : 'getFlowRuleHopCounts'
 

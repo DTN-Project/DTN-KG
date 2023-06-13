@@ -6,7 +6,9 @@ variables:
    - protocol
    Host:
    - mac
-   - vlan 
+   - vlan
+   - switch
+   - port 
    ForwardingDevice:
    
    Object:
@@ -32,7 +34,7 @@ variables:
      - isA
 
 mechanisms:
-     script: 'shared.topology'                
+     script: 'reachability'                
 
 policies:
      - policy:

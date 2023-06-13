@@ -6,6 +6,7 @@ class TemplateUtils:
     templatedata = None
     templateName = None
     templateParentDirectory = None
+    
     def load(self,template_file):
         self.templateName = re.split("\.",re.split("/",template_file)[2])[0]
         self.templateParentDirectory = re.split("/",template_file)[2]
@@ -28,5 +29,8 @@ class TemplateUtils:
 
     def get_policies(self):
         return self.templatedata["policies"]
+    
+    def is_shared(self):
+        return "shared" in self.templatedata["mechanisms"]["script"]
 
 instance = TemplateUtils()
