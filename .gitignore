@@ -6,3 +6,4 @@ Lib/*
 Scripts/*
 *.cfg
 .vscode
+logs/*
