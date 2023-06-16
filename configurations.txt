@@ -1,11 +1,11 @@
 db_host = localhost
 db_port = 7687
 db_user = dtn_user
-db_password = <fill_pwd>
+db_password = dummy_pwd
 db_database = dtnkg
 
 sdn_host = localhost
 sdn_port = 8181
 sdn_user = onos
-sdn_password = <fill_pwd>
+sdn_password = dummy_pwd
 log_file = ./logs/log.txt
