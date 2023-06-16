@@ -24,10 +24,14 @@ variables:
          - isA
 
 mechanisms:
-    script: 'hostswitchmap'
+    script: 'shared.topology'
 
 policies:
     - policy:
-      name: 'HostswitchMap'
+      name: 'DumpHostToSwitchMap'
       deploy: 'getMappings'
+    
+    - policy:
+      name: 'DumpSwitchToSwitchMap'
+      deploy: 'getSwitchMappings'
 

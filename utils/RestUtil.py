@@ -33,4 +33,14 @@ class RestUtil:
         except Exception:
             raise Exception
 
+    def invoke_rest_api_for_post(self, rest_path, json_file):
+        try:
+            auth = self.get_auth_session()
+            rest_url = "http://"+Config.sdn_host+":"+Config.sdn_port+rest_path
+            response = requests.post(rest_url, auth=auth, json=json_file)
+            return response.json()
+        
+        except Exception:
+            raise Exception
+
 instance = RestUtil()

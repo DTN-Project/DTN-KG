@@ -15,8 +15,11 @@ from utils.Configs import Config
 from utils.TemplateUtils import instance as TempUtil
 import requests
 import argparse
-import time
 import pickle
+
+from modules.KGDataModeller import KGDataModeller
+from modules.MechanismExecutor import MechanismExecutor
+from modules.PolicyDeployer import PolicyDeployer
 
 #DTNManager For Defining the Manager Component of the DTN Architecture
 class DTNManager:
@@ -25,8 +28,16 @@ class DTNManager:
         self.sw = Devices()
         self.hosts = Hosts()
         self.links = Links()
+
         self.relations = {}
         self.mac_port = {}                      #To Store The Flow Rules while we build the flow rule KG
+        
+        self.kgDataModeller = KGDataModeller(self.links, self.relations)
+        self.mechanismExecutor = MechanismExecutor(self.relations)
+        self.policyDeployer = PolicyDeployer()
+
+        self.reuse_kg = False
+
         Logger.log_write("DTN Manager Intializing")
         try:
             Logger.log_write("DTN Manager Initialized")
@@ -37,273 +48,7 @@ class DTNManager:
             Logger.close_log()
             self.graphDB.close()
 
-    def connect_switches(self,relation):
-        links = self.links.getLinks()
-
-        for link in links['links']:
-            sourceSwitchId = "\'" + str(re.split("of:", link['src']['device'])[1])+ "\'"
-            sourcePort = str(link['src']['port'])
-            destinationSwitchId = "\'" + str(re.split("of:", link['dst']['device'])[1])+ "\'"
-            destinationPort = str(link['dst']['port'])
-            if(len(DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"})-[r:isConnected]-(b:Switch{id:"+destinationSwitchId+"}) return r")) == 0):
-                DBUtil.execute_query("MATCH (a:Switch{id:"+sourceSwitchId+"}),(b:Switch{id:"+destinationSwitchId+"}) CREATE (a)-[r:"+relation+"{sourcePort:"+sourcePort+",destinationPort:"+destinationPort+"}]->(b)")
-
-    def build_knowledge_graph(self,data):
-        Logger.log_write("Entity Node creation started")
-        entities = TempUtil.get_entities()
-
-        for entity in entities:
-            if (entity=="Switch"):
-                for sw in data["switches"]["devices"]:
-                    id = "\'"+str(re.split("of:",sw["id"])[1])+"\'"
-                    all_props = {"id":id,"type":sw["type"],"available":sw["available"],"role":sw["role"],"mfr":"\'"+sw["mfr"]+"\'","hw":"\'"+sw["hw"]+"\'","sw":"\'"+sw["sw"]+"\'","serial":str(sw["serial"]),"driver":sw["driver"],"chassisId":str(sw["chassisId"]),"lastUpdate":str(sw["lastUpdate"]),"humanReadableLastUpdate":sw["humanReadableLastUpdate"],"protocol":"\'"+sw["annotations"]["protocol"]+"\'"}
-                    
-                    props = TempUtil.get_properties(entity)
-
-                    prop_string=""
-                    for p in props:
-                        prop_string += p+":"+all_props[p]+","
-
-                    prop_string = prop_string[:-1]
-
-                    DBUtil.execute_query("CREATE(n:Switch{"+prop_string+"})")
-
-                    relation = self.process_relations("Switch", "Switch", all_props)
-
-                    Logger.log_write("Switch Node with properties {"+prop_string+"} created")
-
-            elif (entity == "Flow" or entity == "FlowTable" or entity == "Match" or entity == "Instruction" or entity == "EthAddress" or entity == "In_Port" or entity == "Timeout" or entity == "Priority"):
-                
-                for flow in data["flows"]["flows"]:
-                    if(len(flow["selector"]["criteria"])>=2):
-                        all_props = {"groupId": str(flow["groupId"]), "state": flow["state"], "life": str(flow["life"]),
-                                     "liveType": flow["liveType"], "lastSeen": str(flow["lastSeen"]),
-                                     "packets": str(flow["packets"]), "bytes": str(flow["bytes"]), "id": str(flow["id"]),
-                                     "appId": flow["appId"], "priority": str(flow["priority"]), "timeout": str(flow["timeout"]),
-                                     "isPermanent": flow["isPermanent"], "deviceId":str(re.split("of:",flow["deviceId"])[1]),
-                                     "tableId": str(flow["tableId"]), "tableName": str(flow["tableName"]),
-                                     "type": "\'"+flow["treatment"]["instructions"][0]["type"]+"\'",
-                                     "port": "\'"+flow["treatment"]["instructions"][0]["port"]+"\'",
-                                     "in_port": str(flow.get("selector",'').get("criteria")[0].get("port")),
-                                     "dst": "\'"+flow.get("selector",'').get("criteria")[1].get("mac")+"\'",
-                                     "src": "\'"+flow.get("selector",'').get("criteria")[2].get("mac")+"\'"}
-
-                    else:
-                        all_props = {"groupId": str(flow["groupId"]), "state": flow["state"], "life": str(flow["life"]),
-                                     "liveType": flow["liveType"], "lastSeen": str(flow["lastSeen"]),
-                                     "packets": str(flow["packets"]), "bytes": str(flow["bytes"]), "id": str(flow["id"]),
-                                     "appId": flow["appId"], "priority": str(flow["priority"]), "timeout": str(flow["timeout"]),
-                                     "isPermanent": flow["isPermanent"], "deviceId": str(re.split("of:",flow["deviceId"])[1]),
-                                     "tableId": str(flow["tableId"]), "tableName": str(flow["tableName"]),
-                                     "type": "\'"+flow["treatment"]["instructions"][0]["type"]+"\'",
-                                     "port": "\'"+flow["treatment"]["instructions"][0]["port"]+"\'",
-                                     "in_port": str(flow.get("selector",'').get("criteria")[0].get("ethType")),
-                                     "dst": "","src": ""}
-
-                    props = TempUtil.get_properties(entity)
-
-                    prop_string=""
-
-                    for p in props:
-                        if entity == "FlowTable" and p == "tableId":
-                            prop_string += p+":"+"\'"+str(all_props[p])+str(all_props["deviceId"])+"\'"+","
-                            continue
-
-                        prop_string += p+":"+all_props[p]+","
-
-                    prop_string = prop_string[:-1]
-
-                    if (entity == "FlowTable"):
-                        if(len(DBUtil.execute_query("MATCH(n:FlowTable{"+prop_string+"}) RETURN n"))==0):
-                            DBUtil.execute_query("CREATE(n:FlowTable{"+prop_string+"})")
-                            Logger.log_write("FlowTable Node with properties {"+prop_string+"} created")
-
-                            relation = self.process_relations("Switch","FlowTable",all_props)
-
-                            DBUtil.execute_query("MATCH(a:Switch{id:"+"\'"+all_props["deviceId"]+"\'"+"}),(b:FlowTable{"+prop_string+"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                    elif (entity == "Flow"):
-                        DBUtil.execute_query("CREATE(n:Flow{"+prop_string+"})")
-                        Logger.log_write("Flow with properties {"+prop_string+"} created")
-
-                        relation = self.process_relations("FlowTable", "Flow", all_props)
-
-                        DBUtil.execute_query("MATCH(a:FlowTable{tableId:"+"\'"+str(all_props["tableId"])+str(all_props["deviceId"])+"\'"+"}),(b:Flow{id:"+all_props["id"] +"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                    elif (entity == "Instruction"):
-                        DBUtil.execute_query("CREATE(n:Instruction{"+prop_string+"})")
-                        Logger.log_write("Instruction with properties {"+prop_string+"} created")
-
-                        relation = self.process_relations("Flow","Instruction", all_props)
-
-                        DBUtil.execute_query("MATCH(a:Flow{id:"+ all_props["id"] + "}),(b:Instruction{id:" +all_props["id"]+"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                        
-                    elif (entity == "Match"):
-                        DBUtil.execute_query("CREATE(n:Match{"+prop_string+"})")
-                        Logger.log_write("Match with properties {"+prop_string+"} created")
-
-                        relation = self.process_relations("Flow", "Match", all_props)
-
-                        DBUtil.execute_query("MATCH(a:Flow{id:"+ all_props["id"] + "}),(b:Match{id:" +all_props["id"]+"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                    elif (entity == "EthAddress"):
-                        if (len(flow["selector"]["criteria"]) >= 2):
-                            DBUtil.execute_query("CREATE(n:EthAddress{"+prop_string+"})")
-                            Logger.log_write("EthAddress Node with properties {"+prop_string+"} created")
-
-                            relation = self.process_relations("Match","EthAddress", all_props)
-                            DBUtil.execute_query("MATCH(a:Match{id:" + all_props["id"] + "}),(b:EthAddress{id:" + all_props["id"] + "}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                    elif (entity == "In_Port"):
-                        DBUtil.execute_query("CREATE(n:In_Port{"+prop_string+"})")
-                        Logger.log_write("In_Port Node with properties {"+prop_string+"} created")
-
-                        relation = self.process_relations("Match", "In_Port", all_props)
-
-                        DBUtil.execute_query("MATCH(a:Match{id:"+ all_props["id"] + "}),(b:In_Port{id:" +all_props["id"]+"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                    elif (entity == "Timeout"):
-                        DBUtil.execute_query("CREATE(n:Timeout{"+prop_string+"})")
-                        Logger.log_write("Timeout Node with properties {"+prop_string+"} created")
-                        relation = self.process_relations("Flow", "Timeout", all_props)
-
-                        DBUtil.execute_query("MATCH(a:Flow{id:"+ all_props["id"] + "}),(b:Timeout{id:" +all_props["id"]+"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-                    elif (entity == "Priority"):
-                        DBUtil.execute_query("CREATE(n:Priority{"+prop_string+"})")
-                        Logger.log_write("Priority Node with properties {"+prop_string+"} created")
-                        relation = self.process_relations("Flow", "Priority", all_props)
-
-                        DBUtil.execute_query("MATCH(a:Flow{id:"+ all_props["id"] + "}),(b:Priority{id:" +all_props["id"]+"}) CREATE (a)-[r:" + relation + "]->(b)")
-
-            elif(entity == "Host"):
-
-                props = TempUtil.get_properties(entity)
-
-                for host in data["hosts"]["hosts"]:
-                    switch_id = "\'" + str(re.split("of:", host["locations"][0]["elementId"])[1])+ "\'"
-                    all_props = {"mac":"\'"+host["mac"]+"\'","vlan":"\'"+host["vlan"]+"\'","innerVlan":"\'"+host["innerVlan"]+"\'","outerTpid":str(host["outerTpid"]),"configured":host["configured"],"suspended":host["suspended"],"switch":switch_id,"port":host["locations"][0]["port"]}
-
-                    prop_string=""
-                    for p in props:
-                        prop_string += p +":"+all_props[p]+","
-
-                    prop_string = prop_string[:-1]
-
-                    DBUtil.execute_query("CREATE(n:Host{"+prop_string+"})")
-                    Logger.log_write("Host Node with properties {"+prop_string+"} created")
-
-                    relation = self.process_relations("Host", "Switch", all_props)
-
-                    DBUtil.execute_query("MATCH(a:Host{"+prop_string+"}),(b:Switch{id:"+all_props["switch"]+"}) CREATE (a)-[r:" + relation + "]->(b)")
-            else:
-                DBUtil.execute_query("CREATE(n:"+entity+")")
-                relation = self.process_relations(entity,None, all_props)
-
-                Logger.log_write(entity+" Node created")
-
-    def process_relations(self,entity1,entity2,props):
-        relations = TempUtil.get_relations()
-
-        relation = ""
-
-        if entity2 is None:
-            for rel_map in relations:
-                if rel_map["map"][0] == entity1:
-                    if entity1 + "_" + rel_map["map"][1] + "_rel" not in self.relations.keys():
-                        self.relations[entity1 + "_" + rel_map["map"][1] + "_rel"] = rel_map["map"][2]
-
-                    DBUtil.execute_query("MATCH(a:" + entity1 + "),(b:" + rel_map["map"][1] + ") CREATE (a)-[r:" + rel_map["map"][2] + "]->(b)")
-
-                elif rel_map["map"][1] == entity1:
-                    if entity1 + "_" + rel_map["map"][0] + "_rel" not in self.relations.keys():
-                        self.relations[entity1 + "_" + rel_map["map"][0] + "_rel"] = rel_map["map"][2]
-
-                    DBUtil.execute_query("MATCH(a:" + entity1 + "),(b:" + rel_map["map"][0] + ") CREATE (b)-[r:" + rel_map["map"][2] + "]->(a)")
-
-        else:
-            for rel_map in relations:
-                if rel_map["map"][0] == entity1 and rel_map["map"][1] == entity2:
-                    relation += rel_map["map"][2]
-                    if "Properties" in rel_map.keys():
-                        relation += "{"
-                        for p in rel_map["Properties"]:
-                            relation += p + ":" + props[p] + ","
-
-                        relation = relation[:-1]
-                        relation += "}"
-
-                    if (entity1 == "Switch" and entity2 == "Switch"):
-                        self.connect_switches(relation)
-
-                        if "switch_switch_rel" not in self.relations.keys():
-                            self.relations["switch_switch_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Switch" and entity2 == "FlowTable"):
-                        if "switch_flowtable_rel" not in self.relations.keys():
-                            self.relations["switch_flowtable_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "FlowTable" and entity2 == "Flow"):
-                        if "flowtable_flow_rel" not in self.relations.keys():
-                            self.relations["flowtable_flow_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Flow" and entity2 == "Instruction"):
-                        if "flow_insruction_rel" not in self.relations.keys():
-                            self.relations["flow_instruction_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Flow" and entity2 == "Match"):
-                        if "flow_match_rel" not in self.relations.keys():
-                            self.relations["flow_match_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Match" and entity2 == "In_Port"):
-                        if "match_inport_rel" not in self.relations.keys():
-                            self.relations["match_inport_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Match" and entity2 == "EthAddress"):
-                        if "match_eth_rel" not in self.relations.keys():
-                            self.relations["match_eth_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Flow" and entity2 == "Timeout"):
-                        if "flow_timeout_rel" not in self.relations.keys():
-                            self.relations["flow_timeout_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Flow" and entity2 == "Priority"):
-                        if "flow_priority_rel" not in self.relations.keys():
-                            self.relations["flow_priority_rel"] = rel_map["map"][2]
-
-                    if (entity1 == "Host" and entity2 == "Switch"):
-                        if "host_switch_rel" not in self.relations.keys():
-                            self.relations["host_switch_rel"] = rel_map["map"][2]
-
-                    break
-        return relation
-
-
-    def execute_policies(self):          #This Functions Reads the policies from template and executes them
-        Logger.log_write("Executing Template Policices\n")
-
-        mechanisms = TempUtil.get_mechanisms()
-
-        global mechanism_class
-        try:
-            exec("from templates."+str(TempUtil.templateParentDirectory)+"."+str(mechanisms["script"])+" import Mechanism")
-            exec("mechanism_class = Mechanism()")
-        except ModuleNotFoundError as e:
-            print(e)
-
-        policies = TempUtil.get_policies()
-
-        if policies is None:
-            print("[",colored(str(datetime.datetime.now()),'blue'),"]",colored(" No defined polices found in template",'red'))
-            Logger.log_write("No defined polices found in template")
-
-        for policy in policies:                     #Executing Policies
-            print("[",colored(str(datetime.datetime.now()),'blue'),"]",colored(" Executing "+policy["name"]+"\n",'green',attrs=['bold']))
-            Logger.log_write("Executing "+policy["name"]+"\n")
-            exec("mechanism_class."+policy["deploy"]+"(self.relations)")
-
-    def getdata_and_build(self):
+    def getdata_and_build(self, rebuild_kg=False):
         Logger.log_write("Intial Knowledge Graph Build started")
         try:
             while(True):
@@ -313,23 +58,21 @@ class DTNManager:
 
                 raw_data = {"switches":switches,"flows":flows,"hosts":hosts}        #RAW DATA FETCHED FROM SDN CONTROLLER THROUGH REST API
 
-                DBUtil.execute_query("MATCH(n) DETACH DELETE n")
-                Logger.log_write("Old Knowledge Graph cleared")
-                print("[\033[32m"+str(datetime.datetime.now())+"\033[0m]"+"\033[91mDeleted Old Knowledge Graph...Rebuilding\033[00m")
+                if not self.reuse_kg or rebuild_kg:
+                    DBUtil.execute_query("MATCH(n) DETACH DELETE n")
+                    Logger.log_write("Old Knowledge Graph cleared")
+                    print("[\033[32m"+str(datetime.datetime.now())+"\033[0m]"+"\033[91mDeleted Old Knowledge Graph...Rebuilding\033[00m")
 
-                DBUtil.execute_query("CREATE(n:" + TempUtil.templateName + ")")
+                    DBUtil.execute_query("CREATE(n:" + TempUtil.templateName + ")")
+                    if rebuild_kg:
+                        self.reuse_kg = False
+                
 
-                self.build_knowledge_graph(raw_data)                               #This Function dynamically creates the KG based on Template specifications passed as the argument
+                self.kgDataModeller.build_knowledge_graph(raw_data, self.reuse_kg)                               #This Function dynamically creates the KG based on Template specifications passed as the argument
 
-                Logger.log_write("Creating and attaching Policies nodes to Knowledge Graph")
-
-                for policy in TempUtil.get_policies():
-                    DBUtil.execute_query("CREATE(n:"+policy["name"]+")")
-                    DBUtil.execute_query("CREATE(n:"+policy["deploy"]+")")
-                    DBUtil.execute_query("MATCH(a:"+policy["name"]+"),(b:"+policy["deploy"]+") CREATE (a)-[r:hasMechanism]->(b)")
-                    DBUtil.execute_query("MATCH(a:"+TempUtil.templateName+"),(b:"+policy["name"]+") CREATE (a)-[r:hasPolicy]->(b)")
-
-                Logger.log_write("Attaching Policiy nodes to Knowledge Graph Finished")
+                print("\n[",colored(str(datetime.datetime.now()),'blue'),"]",colored(" KG updation is completed\n",'green',attrs=['bold']))
+                
+                self.policyDeployer.deploy_policies()
 
                 Logger.log_write("Attaching Variable nodes to Knowledge Graph")
                 DBUtil.execute_query("MATCH(a:Object),(b:" +TempUtil.templateName+") CREATE (b)-[r:hasVariables]->(a)")
@@ -337,7 +80,8 @@ class DTNManager:
 
                 print("\n[",colored(str(datetime.datetime.now()),'blue'),"]",colored(" Executing Deployed Policies\n",'green',attrs=['bold']))
                 Logger.log_write("Executing Deployed Policies")
-                self.execute_policies()
+                # self.execute_policies()
+                self.mechanismExecutor.execute_mechanisms()
                 Logger.log_write("Finshed Executing Deployed Policies")
                 print("\n[",colored(str(datetime.datetime.now()),'blue'),"]",colored("Finshed Executing Deployed Policies\n",'red',attrs=['bold']))
                 
@@ -396,7 +140,8 @@ while(True):
     inp = input()
     if(inp =="s"):
         TempUtil.load(template_file)            #Initialize the template file and load teh data using helper util class
-        d.getdata_and_build()                   #Initiate the data retrival and KG building process
+        d.reuse_kg = TempUtil.is_shared()
+        d.getdata_and_build(True)                   #Initiate the data retrival and KG building process
         
     elif(inp == "h"):
         while(True):

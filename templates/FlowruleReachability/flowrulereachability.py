@@ -120,7 +120,7 @@ class Mechanism:        # Class for defining Mechanism Should be named Mechanism
                     # repeat the above steps for the current switch
                     switchId = str(data5[0]['s2']['id'])
 
-    def getHops(self, kg_relations):
+    def getFlowRuleHopCounts(self, kg_relations):
         # Getting the relations represented in built KG
         host_switch_rel = kg_relations["host_switch_rel"]
         switch_switch_rel = kg_relations["switch_switch_rel"]
